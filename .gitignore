@@ -1,2 +1,4 @@
 data/
 previous_project/
+*.csv
+*.json
