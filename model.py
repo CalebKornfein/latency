@@ -8,12 +8,16 @@ from tqdm import tqdm
 import numpy as np
 
 def fit_xgb(X_train, X_test, y_train, y_test):
-
     xg_clf = xgb.XGBClassifier(objective ='binary:logistic', verbosity=1)
     xg_clf.fit(X_train, y_train)
-    y_hat = xg_clf.predict_proba(X_test)[:,1]
 
-    binary_metrics(y_test, y_hat, title=f"XGBoost using top {len(X_train[0])} features", binary=False)
+    y_hat_train = xg_clf.predict_proba(X_train)[:,1]
+    y_hat_test = xg_clf.predict_proba(X_test)[:,1]
+
+    binary_metrics(y_train, y_hat_train, title=f"XGBoost using top {len(X_train[0])} features, train", binary=False)
+    plt.show()
+
+    binary_metrics(y_test, y_hat_test, title=f"XGBoost using top {len(X_train[0])} features, test", binary=False)
     plt.show()
 
 def calc_avg_auc_looped_xgb(X_train, X_test, y_train, y_test):
@@ -32,13 +36,32 @@ def calc_avg_auc_looped_xgb(X_train, X_test, y_train, y_test):
     print(f"AVERAGE AUC FOR SINGLE FEATURE XGB MODELS ACROSS TOP {n} FEATURES: {avg_auc}")
     return store
 
-def fit_rf(X_train, X_test, y_train, y_test):
-    clf = RandomForestClassifier(bootstrap=False, random_state=0, verbose=False)
+def fit_rf(X_features, X_train, X_test, y_train, y_test):
+    n_features = X_train.shape[1]
+    clf = RandomForestClassifier(bootstrap=False, max_depth=2, random_state=0, verbose=False)
     clf.fit(X_train, y_train)
-    y_hat = clf.predict_proba(X_test)[:,1]
-    
-    binary_metrics(y_test, y_hat, title="RF", binary=False)
-    plt.show()
+
+    # feature importance by Gini importance
+    sorted_idx = clf.feature_importances_.argsort()
+
+    # top ten features by importance
+
+    features, importances = X_features[sorted_idx][n_features - 10: ], clf.feature_importances_[sorted_idx][n_features - 10: ]
+    plt.figure()
+    plt.barh(features, importances)
+    plt.title("Top 10 features by Gini importance:")
+
+    # get predicted probabilities for train and test
+    y_hat_train = clf.predict_proba(X_train)[:,1]
+    y_hat_test = clf.predict_proba(X_test)[:,1]
+
+    # plot auc curves
+    plt.figure()
+    binary_metrics(y_train, y_hat_train, title="RF Train", binary=False)
+
+    plt.figure()
+    binary_metrics(y_test, y_hat_test, title = "RF Test", binary=False)
+
 
 def individual_roc_curves_for_top_n(X_train, X_test, y_train, y_test):
     n = len(X_train[0])
@@ -54,11 +77,14 @@ def individual_roc_curves_for_top_n(X_train, X_test, y_train, y_test):
 def main():
 
     # load data and create 80% train 20% test splits
-    X, y = load_data(type='HIV_Binary')
+    X, X_features, y = load_data(type='HIV_Binary')
     X_train, X_test, y_train, y_test = create_train_test_split(X, y)
     
     # only use top 60 features
+    n_features = 60
+
     X_train, X_test = top_n_X(X_train, X_test, 60)
+    X_features = X_features[:n_features]
 
     # try XGBoost
     #fit_xgb(X_train, X_test, y_train, y_test)
