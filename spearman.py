@@ -26,9 +26,14 @@ def calculate_spearman():
     df = pd.DataFrame(data, columns=columns)
     df.to_csv('spearman.csv', index=False)
 
-def select_top_features(n=200):
+def select_top_features(n=200, type=None):
     df = pd.read_csv('spearman.csv').sort_values(by='abs_spearman', ascending=False)
-    top_features = df.head(n)
+
+    if type == None:
+        top_features = df.head(n)
+    else:
+        top_features = df[df['dataset'] == type].head(n)
+    
     top_features = set(top_features.feature.values)
     return top_features
 
