@@ -34,13 +34,15 @@ def convert_label_dict_values_to_list(labels):
 def load_labels(type='HIV_Float', list_val = True):
     labels = json.load(open('hiv.json', 'r'))[type]
     if list_val:
-        labels = convert_label_dict_values_to_list(labels)
+        labels = list(labels.values())
     return labels
 
 def load_data(**kwargs):
-    X = pd.read_csv('multiomics.csv').to_numpy()
+    df = pd.read_csv('multiomics.csv')
+    X_features = df.columns
+    X = df.to_numpy()
     y = load_labels(**kwargs)
-    return X, y
+    return X, X_features, y
 
 def create_train_test_split(X, y, random_state = 0, prop_train=0.80):
     X_train, X_test, y_train, y_test = train_test_split(X, y, random_state = random_state, train_size = prop_train)
