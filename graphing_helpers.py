@@ -59,3 +59,29 @@ def binary_metrics(y_true, y_pred, paramdict=None, title=None, label=None, outpu
         plt.plot([0, 1], [0, 1], linestyle="--", c="k")
 
     return aucs, f1
+
+def overlay(y_train_true, y_train_pred, y_test_true, y_test_pred, title=None):
+    '''
+    :param y_true: an (Nx1) vector of the true labels for each sample.
+    :param y_pred: an (Nx1) vector of output probabilities for the POSITIVE class, which in our case
+        is influential.
+    :param output_text: a boolean if you want to output the f1, macrof1, and auc scores to a textfile
+    :param filepath: the filepath to which the output text will go
+    :return: nothing, just generates plots
+    '''
+    train_fpr, train_tpr, train_thresholds = roc_curve(y_train_true, y_train_pred)
+    train_aucs = auc(train_fpr, train_tpr)
+
+    test_fpr, test_tpr, test_thresholds = roc_curve(y_test_true, y_test_pred)
+    test_aucs = auc(test_fpr, test_tpr)
+
+    plt.figure()
+    plt.xlabel("False Positive Rate")
+    plt.ylabel("True Positive Rate")
+    if title is None:
+        plt.title(f"ROC Curve")
+    else:
+        plt.title(title)
+    plt.plot(train_fpr, train_tpr,linestyle="--", marker=".", markersize=15, label = f'Train, AUC = {train_aucs}')
+    plt.plot(test_fpr, test_tpr,linestyle="--", marker=".", markersize=15, label = f'Train, AUC = {test_aucs}')
+    plt.plot([0, 1], [0, 1], linestyle="--", c="k")

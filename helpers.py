@@ -1,52 +1,47 @@
-import csv
+from winreg import REG_NOTIFY_CHANGE_LAST_SET
 import pandas as pd
 import os
 import json
+import numpy as np
 
-from sklearn.model_selection import train_test_split
+def load_data(top_n=60, type=None, balanced=False, label_type='HIV_Binary'):
+    if type:
+        f_train = f"data/processed/{type}_train.csv"
+        f_test = f"data/processed/{type}_test.csv"
+        X_train = pd.read_csv(f_train, index_col=[0]).iloc[:, np.arange(top_n)]
+        X_test = pd.read_csv(f_test, index_col=[0]).iloc[:, np.arange(top_n)]
+    elif balanced:
+        rna_train = pd.read_csv("data/processed/rna_train.csv", index_col=[0]).iloc[:, np.arange(top_n)]
+        motif_train = pd.read_csv("data/processed/motif_train.csv", index_col=[0]).iloc[:, np.arange(top_n)]
+        atac_train = pd.read_csv("data/processed/atac_train.csv", index_col=[0]).iloc[:, np.arange(top_n)]
+        rna_test = pd.read_csv("data/processed/rna_test.csv", index_col=[0]).iloc[:, np.arange(top_n)]
+        motif_test = pd.read_csv("data/processed/motif_test.csv", index_col=[0]).iloc[:, np.arange(top_n)]
+        atac_test = pd.read_csv("data/processed/atac_test.csv", index_col=[0]).iloc[:, np.arange(top_n)]
+        X_train = pd.concat([rna_train, motif_train, atac_train], axis=1)
+        X_test = pd.concat([rna_test, motif_test, atac_test], axis=1)
+    else:
+        X_train = pd.read_csv("data/processed/overall_train.csv", index_col=[0]).iloc[:, np.arange(top_n)]
+        X_test = pd.read_csv("data/processed/overall_test.csv", index_col=[0]).iloc[:, np.arange(top_n)]
 
-def generate_dataset_given_feature_names(feature_names, out):
-    data = []
-    columns = []
-
-    for file in ['data/rna.mat/rna.mat.csv', 'data/motif.mat.csv']:
-        with open(file, 'r') as f:    
-            
-            reader = csv.DictReader(f)
-            for row in reader:
-
-                if row[''] in feature_names:
-                    data_row = [float(v) if not v == row[''] else v for k, v in row.items()]
-                    feature = data_row[0]
-                    vals = data_row[1:]
-                    
-                    columns.append(feature)
-                    data.append(vals)
-
-    
-    df = pd.DataFrame(data).T
-    df.columns = columns
-    df.to_csv(out, index=False)
-
+    return X_train, X_test
+        
 def convert_label_dict_values_to_list(labels):
     return list(labels.values())
 
-def load_labels(type='HIV_Float', list_val = True):
-    labels = json.load(open('hiv.json', 'r'))[type]
+def load_labels(label_type='HIV_Float', list_val = True):
+    labels = json.load(open('processed_data/hiv.json', 'r'))[label_type]
     if list_val:
         labels = list(labels.values())
     return labels
 
-def load_data(**kwargs):
-    df = pd.read_csv('multiomics.csv')
-    X_features = df.columns
+def load_data(features=None, **kwargs):
+    df = pd.read_csv('processed_data/multiomics.csv')
+    if features != None:
+        df = df[features]
+
     X = df.to_numpy()
     y = load_labels(**kwargs)
-    return X, X_features, y
-
-def create_train_test_split(X, y, random_state = 0, prop_train=0.80):
-    X_train, X_test, y_train, y_test = train_test_split(X, y, random_state = random_state, train_size = prop_train)
-    return X_train, X_test, y_train, y_test
+    return X, y
 
 def top_n_X(X_train, X_test, n):
     new_X_train, new_X_test = X_train[:, :n], X_test[:, :n]

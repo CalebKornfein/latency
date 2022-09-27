@@ -6,6 +6,7 @@ from matplotlib import pyplot as plt
 from sklearn.metrics import auc, roc_curve
 from tqdm import tqdm
 import numpy as np
+import pandas as pd
 
 def fit_xgb(X_train, X_test, y_train, y_test):
     xg_clf = xgb.XGBClassifier(objective ='binary:logistic', verbosity=1)
@@ -46,7 +47,7 @@ def fit_rf(X_features, X_train, X_test, y_train, y_test):
 
     # top ten features by importance
 
-    features, importances = X_features[sorted_idx][n_features - 10: ], clf.feature_importances_[sorted_idx][n_features - 10: ]
+    features, importances = np.array(X_features)[sorted_idx][n_features - 10: ], clf.feature_importances_[sorted_idx][n_features - 10: ]
     plt.figure()
     plt.barh(features, importances)
     plt.title("Top 10 features by Gini importance:")
@@ -63,28 +64,31 @@ def fit_rf(X_features, X_train, X_test, y_train, y_test):
     binary_metrics(y_test, y_hat_test, title = "RF Test", binary=False)
 
 
-def individual_roc_curves_for_top_n(X_train, X_test, y_train, y_test):
+def individual_roc_curves_for_top_n(X_features, X_train, X_test, y_train, y_test):
     n = len(X_train[0])
     aucs = []
+    plt.figure()
     for i in range(n):
         y_hat = X_test[:,i]
         binary_metrics(y_test, y_hat, title=f"Overlay of individual ROC curves using the top {n}", binary=False)
         fpr, tpr, thresholds = roc_curve(y_test, y_hat)
         aucs.append(auc(fpr, tpr))
     plt.show()
+
+    # plot only highest performing auc:
+    plt.figure()
+    max_index = aucs.index(max(aucs))
+    feature = X_features[feature]
+
     return aucs
 
 def main():
+    # only use top 60 features
+    X_features = pd.read_csv('spearman.csv').feature[:60].to_list()
 
     # load data and create 80% train 20% test splits
-    X, X_features, y = load_data(type='HIV_Binary')
+    X, y = load_data(features=X_features, label_type='HIV_Binary')
     X_train, X_test, y_train, y_test = create_train_test_split(X, y)
-    
-    # only use top 60 features
-    n_features = 60
-
-    X_train, X_test = top_n_X(X_train, X_test, 60)
-    X_features = X_features[:n_features]
 
     # try XGBoost
     #fit_xgb(X_train, X_test, y_train, y_test)
@@ -93,7 +97,7 @@ def main():
     #calc_avg_auc_looped_xgb(X_train, X_test, y_train, y_test)
 
     # try rf using top 60 features
-    fit_rf(X_train, X_test, y_train, y_test)
+    fit_rf(X_features, X_train, X_test, y_train, y_test)
     plt.show()
 
 if __name__ == "__main__":
