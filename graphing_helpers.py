@@ -77,7 +77,7 @@ def overlay_roc(clf, X_train, X_test, y_train, y_test, title=None):
     else:
         plt.title(title)
     plt.plot(train_fpr, train_tpr,linestyle="--", marker=".", markersize=15, label = f'Train, AUC = {round(train_aucs, 3)}')
-    plt.plot(test_fpr, test_tpr,linestyle="--", marker=".", markersize=15, label = f'Train, AUC = {round(test_aucs, 3)}')
+    plt.plot(test_fpr, test_tpr,linestyle="--", marker=".", markersize=15, label = f'Test, AUC = {round(test_aucs, 3)}')
     plt.plot([0, 1], [0, 1], linestyle="--", c="k")
     plt.legend()
 

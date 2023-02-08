@@ -1,4 +1,6 @@
 data/
 previous_project/
+gosdt_guesses/
+gosdt_sweep_results/
 *.csv
 *.json

@@ -5,13 +5,13 @@ import pacmap
 from sklearn.preprocessing import MinMaxScaler
 import matplotlib.pyplot as plt
 
-def PaCMAP(level='Observation', label_type='HIV_Binary', data = 'Balanced'):
+def PaCMAP(level='Observation', label_type='HIV_Binary', data = 'Overall'):
     if data == 'Balanced':
-        X_train, X_test, y_train, y_test = load_data(top_n = 10, balanced=True, label_type=label_type)
+        X_train, X_test, y_train, y_test = load_data(n = 10, balanced=True, label_type=label_type)
         data_label = "balanced data"
     else:
         top_n = 50
-        X_train, X_test, y_train, y_test = load_data(top_n = top_n, label_type=label_type)
+        X_train, X_test, y_train, y_test = load_data(n=50, label_type='10')
         data_label = f"top {top_n} features"
 
     if level == 'Feature':
@@ -37,6 +37,7 @@ def PaCMAP(level='Observation', label_type='HIV_Binary', data = 'Balanced'):
             ax.scatter(X_train_PaCMAP[:, 0], X_train_PaCMAP[:, 1], s=0.6)
             for i, label in enumerate(annotations):
                 ax.annotate(f"{label} ({i})", (X_train_PaCMAP[i, 0], X_train_PaCMAP[i,1]))
+    plt.legend()
 
 if __name__ == "__main__":
     # Try running the various combinations of PaCMAP
