@@ -7,10 +7,13 @@ from tqdm import tqdm
 import json
 import os
 from sklearn.model_selection import train_test_split
+from helpers import load_data, add_label, top_10_percent
 
 
-def scrape_hiv():
-    for v in ['v1', 'v2', 'combined']:
+def scrape_hiv(versions=['combined']):
+    # HIV comes from the rna.mat.csv dataset. This helper finds the appropriate
+    # column and writes it its own file.
+    for v in versions:
         file = f'data/base/{v}/rna.mat.csv'
         rows = from_txt(f'data/base/{v}/rna.mat.rownames.txt', numerical=False)
         with open(file, 'r') as f:
@@ -21,6 +24,7 @@ def scrape_hiv():
                 if row == 'HIV':
                     with open(f'data/base/{v}/hiv.txt', 'w') as out:
                         out.write('\n'.join([v for v in line]))
+                    print("Found and wrote HIV!")
                     break
 
 
@@ -43,21 +47,12 @@ def fetch_train_test_indices(n_samples, save=True):
     return train_indices, test_indices
 
 
-def load(f):
-    file = open(f, 'r')
-    reader = csv.reader(file, delimiter=',')
-    first = next(reader)
-    second = next(reader)
-    print(len(first))
-    print(len(second))
-    print("First", first[0], first[-1])
-    print("Second", second[0], second[-1])
-
-
 def create_merged_motif():
+    # Motif observations from
+
     # Observation names
-    columns = from_txt('data/base/v1/rna.mat.colnames.txt', False) + \
-        from_txt('data/base/v2/rna.mat.colnames.txt', False)
+    columns = from_txt('data/base/v1/rna.mat.colnames.txt', numerical=False) + \
+        from_txt('data/base/v2/rna.mat.colnames.txt', numerical=False)
 
     v1 = from_txt('data/base/v1/motif.mat.rownames.txt', numerical=False)
     v2 = from_txt('data/base/v2/motif.mat.rownames.txt', numerical=False)
@@ -105,17 +100,18 @@ def create_merged_rna():
     combined = combined.T
 
     with open('data/base/combined/rna.mat.rownames.txt', 'w') as f:
-        for line in list(combined.index):
+        for line in tqdm(list(combined.index)):
             f.write(f"{line}\n")
 
     with open('data/base/combined/rna.mat.colnames.txt', 'w') as f:
-        for line in list(combined.columns):
+        for line in tqdm(list(combined.columns)):
             f.write(f"{line}\n")
 
     combined.to_csv('data/base/combined/rna.mat.csv', index=False)
 
 
 def calculate_spearman(version, train_indices):
+    # Used for either the V1 data or the V2 data, but not the combined data
     data = []
     columns = ['feature', 'dataset', 'spearman', 'abs_spearman', 'pvalue']
 
@@ -165,6 +161,8 @@ def calculate_spearman(version, train_indices):
 
 
 def calculate_combined_spearman(train_indices):
+    # Used for the combined data, not for V1 or V2 alone.
+    # This is because the combined data
     data = []
     columns = ['feature', 'dataset', 'spearman', 'abs_spearman', 'pvalue']
 
@@ -218,18 +216,21 @@ def load_train_test_indices(version='combined'):
 def select_top_features(n=50, type=None, version='combined'):
     df = pd.read_csv(f'data/processed/{version}/spearman_{version}.csv')
     features = list(df.feature)
-    datasets = list(df.dataset)
+    # what type of feature it is
+    feature_types = list(df.dataset)
 
-    def include(feature, dataset):
-        if 'MT' in feature:
+    def include(feature, feature_type=None):
+        # Filter out mitochondrial features which start with MT-
+        if feature.find('MT-') == 0:
             return False
         if 'HIV' in feature:
             return False
-        if type and dataset != type:
+        # Filter to a specific type if type is specified
+        if (type != None) and (feature_type != type):
             return False
         return True
 
-    return [feature for feature, dataset in zip(features, datasets) if include(feature, dataset)][:n]
+    return [feature for feature, feature_type in zip(features, feature_types) if include(feature, feature_type)][:n]
 
 
 def split_labels(train_indices, test_indices, version):
@@ -295,14 +296,18 @@ def split_train_test(train_out, test_out, feature_names, version):
 
 
 if __name__ == "__main__":
+    # Make the out directory for processed metrics
+    os.makedirs('data/processed/combined', exist_ok=True)
+
     # 1) Generate train and test indices
     n_samples_v1 = 61708
     n_samples_v2 = 30831
-    train_indices, test_indices = train_test_split(
-        np.arange(n_samples_v1 + n_samples_v2), test_size=0.2, random_state=0)
+    train_indices, test_indices = fetch_train_test_indices(
+        n_samples_v1 + n_samples_v2, save=True)
 
     # 2) Generate merged dataset
     # note -- ATAC not merged as features not aligned
+    # note note -- this can take a while due to large I/O and memory need!
     create_merged_rna()
     create_merged_motif()
 
@@ -310,20 +315,17 @@ if __name__ == "__main__":
     scrape_hiv()
 
     # 4) Calculate spearman coefficients for all features against HIV using the train data
-    calculate_spearman('v1', train_indices)
-    calculate_spearman('v2', train_indices)
     calculate_combined_spearman(train_indices)
 
-    # 5) Select features (ranked by absolute spearman correlation) for:
-    # -- Top 250 overall
-    # -- Top 50 RNA
-    # -- Top 50 Motif
-    # -- Top 50 ATAC
+    # 5) Select features (ranked by absolute spearman correlation) for the top 2000 overall
+    #    and write these features to a csv.
     #
+    #    Here, the Mitochondrial features starting with MT- are filtered out.
+
     # Then, write the datasets to a csv
 
-    for version in ['v1', 'v2']:
-        overall = select_top_features(100, version=version)
+    for version in ['combined']:
+        overall = select_top_features(2000, version=version)
         # rna = select_top_features(50, type='rna', version=version)
         # motif = select_top_features(50, type='motif', version=version)
         # atac = select_top_features(50, type='atac', version=version)
@@ -338,64 +340,4 @@ if __name__ == "__main__":
                 'data', 'processed', version, data_type + "_test.csv")
             split_train_test(train_out, test_out, feature_names, version)
 
-
-# ------------------------- Old Functions---------------------------------------------
-def create_merged_rna_old():
-    # Observation names
-    columns = from_txt('data/base/v1/rna.mat.colnames.txt', False) + \
-        from_txt('data/base/v2/rna.mat.colnames.txt', False)
-
-    # Handle RNA
-    v1 = from_txt('data/base/v1/rna.mat.rownames.txt', numerical=False)
-    v2 = from_txt('data/base/v2/rna.mat.rownames.txt', numerical=False)
-    common = set(v1).intersection(set(v2))
-
-    def fetch_feature(version, version_features, feature):
-        with open(f'data/base/{version}/rna.mat.csv') as d:
-            reader = csv.reader(d)
-            next(reader)
-            feature_index = version_features.index(feature)
-
-            for i in range(feature_index + 1):
-                line = next(reader)
-            return [float(x) for x in line]
-
-    with open('data/processed/combined_rna.csv', 'a') as f:
-        writer = csv.writer(f)
-        writer.writerow(columns)
-
-        first_rna = csv.reader(open('data/base/v1/rna.mat.csv', 'r'))
-        next(first_rna)
-        for feature in tqdm(v1):
-            if not feature in common:
-                continue
-            line = next(first_rna)
-            line = [float(x) for x in line]
-            line = line + fetch_feature('v2', v2, feature)
-            writer.writerow(line)
-
-
-def combined(out, feature_names):
-    feature_set = set(feature_names)
-    data = []
-    columns = []
-    rows = list(json.load(open('data/processed/hiv.json', 'r'))
-                ['HIV_Float'].keys())
-
-    for file in [('data/base/v1/rna.mat/rna.mat.csv'), ('data/base/v1/motif.mat.csv'), ('data/base/v1/atac.mat/atac.csv')]:
-        with open(file, 'r') as f:
-            reader = csv.reader(f)
-            next(reader)
-
-            for row in tqdm(reader):
-                feature = row[0]
-                if feature in feature_set:
-                    columns.append(feature)
-                    data.append([float(x) for x in row[1:]])
-
-    df = pd.DataFrame(data).T
-    df.columns = columns
-
-    # Reorder dataset such that it remains sorted by descending abs spearman coefficient
-    df = df[feature_names]
-    df.to_csv(out)
+    add_label('10', top_10_percent)

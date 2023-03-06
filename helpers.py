@@ -3,41 +3,11 @@ import os
 import json
 import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.metrics import roc_curve, auc, RocCurveDisplay, f1_score, log_loss, mean_squared_error, zero_one_loss
+from sklearn.metrics import roc_curve, auc
 import seaborn as sns
 import math
 import json
-
-# def load_data(top_n=30, type=None, balanced=False, label_type='HIV_Binary'):
-#     if type:
-#         f_train = f"data/processed/{type}_train.csv"
-#         f_test = f"data/processed/{type}_test.csv"
-#         X_train = pd.read_csv(f_train, index_col=[0])
-#         X_test = pd.read_csv(f_test, index_col=[0])
-#     elif balanced:
-#         rna_train = pd.read_csv("data/processed/rna_train.csv", index_col=[0])
-#         motif_train = pd.read_csv("data/processed/motif_train.csv", index_col=[0])
-#         atac_train = pd.read_csv("data/processed/atac_train.csv", index_col=[0])
-#         rna_test = pd.read_csv("data/processed/rna_test.csv", index_col=[0])
-#         motif_test = pd.read_csv("data/processed/motif_test.csv", index_col=[0])
-#         atac_test = pd.read_csv("data/processed/atac_test.csv", index_col=[0])
-#         X_train = pd.concat([rna_train, motif_train, atac_train], axis=1)
-#         X_test = pd.concat([rna_test, motif_test, atac_test], axis=1)
-#     else:
-#         X_train = pd.read_csv("data/processed/overall_train.csv", index_col=[0])
-#         X_test = pd.read_csv("data/processed/overall_test.csv", index_col=[0])
-#         X_new = pd.read_csv("data/rna.csv", index_col=[0])
-
-#     # Select top n and filter out all Mitochondrial features
-#     filter = [x for x in X_train.columns if "MT-" not in x][:top_n]
-#     X_train, X_test = X_train[filter], X_test[filter]
-#     X_new = X_new[filter]
-
-#     y_train = pd.read_csv(f"data/processed/HIV_train.csv", index_col = [0])[label_type]
-#     y_test = pd.read_csv(f"data/processed/HIV_test.csv", index_col = [0])[label_type]
-#     y_new_test = pd.read_csv(f"data/HIV.csv", index_col = [0])[label_type]
-
-#     return X_train, X_test, y_train, y_test, X_new, y_new_test
+from collections import namedtuple
 
 
 def load_data(n=30, version='combined', label_type='10'):
@@ -55,30 +25,31 @@ def load_data(n=30, version='combined', label_type='10'):
     return X_train, X_test, y_train, y_test
 
 
-def overlay(y_train_true, y_train_pred, y_test_true, y_test_pred, title=None):
-    sns.set_style("whitegrid")
-    sns.set_context("talk")
+def fetch_person_index(y_train_index, y_test_index):
+    # Observations with index <= 61708 come from subject 1, while observations with
+    # index > 61708 come from subject 2.
+    def filter_p1(y):
+        return [True if y_i < 61708 else False for y_i in y]
 
-    train_fpr, train_tpr, train_thresholds = roc_curve(
-        y_train_true, y_train_pred)
-    train_aucs = auc(train_fpr, train_tpr)
+    def filter_p2(y):
+        return [True if y_i >= 61708 else False for y_i in y]
+    train_index_p1, test_index_p1 = filter_p1(
+        y_train_index), filter_p1(y_test_index)
+    train_index_p2, test_index_p2 = filter_p2(
+        y_train_index), filter_p2(y_test_index)
+    return train_index_p1, test_index_p1, train_index_p2, test_index_p2
 
-    test_fpr, test_tpr, test_thresholds = roc_curve(y_test_true, y_test_pred)
-    test_aucs = auc(test_fpr, test_tpr)
 
-    plt.figure()
-    plt.xlabel("False Positive Rate")
-    plt.ylabel("True Positive Rate")
-    if title is None:
-        plt.title(f"ROC Curve")
-    else:
-        plt.title(title)
-    plt.plot(train_fpr, train_tpr, linestyle="--", marker=".",
-             markersize=15, label=f'Train, AUC = {round(train_aucs, 2)}')
-    plt.plot(test_fpr, test_tpr, linestyle="--", marker=".",
-             markersize=15, label=f'Test, AUC = {round(test_aucs, 2)}')
-    plt.plot([0, 1], [0, 1], linestyle="--", c="k")
-    plt.legend()
+def split_data_by_person(X_train, X_test, y_train, y_test):
+    train_index_p1, test_index_p1, train_index_p2, test_index_p2 = fetch_person_index(
+        y_train.index, y_test.index)
+    personal_data = namedtuple(
+        "personal_data", ["X_train", "X_test", "y_train", "y_test"])
+    p1 = personal_data(X_train[train_index_p1], X_test[test_index_p1],
+                       y_train[train_index_p1], y_test[test_index_p1])
+    p2 = personal_data(X_train[train_index_p2], X_test[test_index_p2],
+                       y_train[train_index_p2], y_test[test_index_p2])
+    return p1, p2
 
 
 def fetch_observation_type(X_train, X_test, y_train, y_test, type):
@@ -121,8 +92,9 @@ def quantize(y_train, y_test):
     return train, test
 
 
-def top_n_percent(y_train, y_test):
-    split_value = y_train['float'].quantile(0.9)
+def top_10_percent(y_train, y_test):
+    y = pd.concat([y_train, y_test])
+    split_value = y.float.quantile(0.9)
     print(f"Split if HIV > {split_value}")
 
     def to_quantiles(x):
