@@ -20,7 +20,7 @@ def aggregate(l):
     return Counter(features)
 
 
-def top_n_features(model_features, figsdir, n=7):
+def top_n_features(model_features, figsdir, n=7, results_path=None):
     # Some models are "trivial" and have no features,
     # only predicting one class the entire time. Drop these.
     model_features = model_features.dropna()
@@ -29,14 +29,20 @@ def top_n_features(model_features, figsdir, n=7):
         d[key] = d[key] / len(model_features)
 
     x, y = [], []
-    for k, v in d.most_common(n):
+    for k, v in d.most_common(len(d)):
         x.append(k)
         y.append(v)
+
+    if results_path:
+        df = pd.DataFrame([(x, y) for (x, y) in zip(x, y)])
+        df.columns = ['Feature', 'Proportion of models with feature']
+        df.to_csv(os.path.join(results_path, 'feature_proportions.csv'))
+
 
     fig, ax = plt.subplots(figsize=(9.2, 5))
     sns.set(rc={'figure.figsize': (6, 5)})
     sns.set(style="white", color_codes=True)
-    sns.barplot(ax=ax, x=x, y=y, palette="autumn")
+    sns.barplot(ax=ax, x=x[:n], y=y[:n], palette="autumn")
     plt.title(f'Commonly occurring features', fontsize=20)
     plt.ylabel('Proportion occurrence', fontsize=20)
     plt.yticks(fontsize=16)
@@ -106,6 +112,32 @@ def style_pr_curve_by_person(train_precision, train_recall, test_precision_p1, t
     fig.savefig(os.path.join(os.getcwd(), figsdir,
                 "gosdt_pr_by_subject.png"), bbox_inches='tight', dpi=300)
 
+def overlay_roc(train_fpr, train_tpr, test_fpr_p1, test_tpr_p1, test_fpr_p2, test_tpr_p2, type='combined', figpath=None, title=None):
+    fig, ax = plt.subplots()
+    plt.style.use('classic')
+    ax.grid(True, linestyle='dotted')
+    ax.set_xlabel("False Positive Rate", fontsize=16)
+    ax.set_ylabel("True Positive Rate", fontsize=16)
+
+    if title is None:
+        plt.title(f"ROC curve of GOSDT models by subject", fontsize=16)
+    else:
+        plt.title(title)
+    plt.plot(train_fpr, train_tpr, linestyle="--", marker=".",
+             markersize=10, c="orange", label=f'Train')
+    plt.plot(test_fpr_p1, test_tpr_p1, linestyle="--", marker=".",
+             markersize=10, c="blue", label=f'Donor 1 Test')
+    plt.plot(test_fpr_p2, test_tpr_p2, linestyle="--", marker=".",
+            markersize=10, c="blue", label=f'Donor 2 Test')
+    plt.plot([0, 1], [0, 1], linestyle="--", c="k")
+    plt.legend(fontsize=16, loc='lower right')
+    if figpath:
+        name = f"gosdt_{type}_roc"
+        fig.savefig(os.path.join(os.getcwd(), figpath, name +
+                    ".png"), bbox_inches='tight', dpi=300)
+        fig.savefig(os.path.join(os.getcwd(), figpath, name +
+                    ".pdf"), bbox_inches='tight', dpi=300)
+
 
 def main():
     kFigsDir = 'graphics/v3/gosdt'
@@ -120,7 +152,7 @@ def main():
     test_precision_p1, test_recall_p1 = df['test_precision_p1'].values, df['test_recall_p1'].values
     test_precision_p2, test_recall_p2 = df['test_precision_p2'].values, df['test_recall_p2'].values
 
-    top_n_features(model_features, kFigsDir, n=7)
+    top_n_features(model_features, kFigsDir, n=7, results_path=kGosdtDir)
     style_pr_curve(train_precision, train_recall,
                    test_precision, test_recall, kFigsDir)
     style_pr_curve_by_person(train_precision, train_recall, test_precision_p1,

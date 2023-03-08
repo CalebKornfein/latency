@@ -47,21 +47,6 @@ def config2name(path, n_features, max_thresholds, n_est, max_depth, sample_weigh
     return os.path.join(path, name)
 
 
-def name2config(name):
-    tokens = name.split('_')
-    d = {
-        'max_thresholds': int(tokens[1]),
-        'n_features': int(tokens[2][0]),
-        'n_est': [int(x) for x in tokens[3]],
-        'max_depth': [int(x) for x in tokens[4]],
-        'sample_weight': [float(x) for x in tokens[5]],
-        'gosdt_depth': [int(x) for x in tokens[7]],
-        'regularization': [float(x) for x in tokens[8]],
-        'weight': [float(x) for x in tokens[9]]
-    }
-    return d
-
-
 def threshold_guess_(n_features, max_thresholds, n_est, max_depth, sample_weight, out):
     # Load the data.
     X_train, X_test, y_train, y_test = load_data(n=n_features, label_type='10')
@@ -137,41 +122,46 @@ def gosdt_(X_train, y_train, X_test, y_test, y_train_index, y_test_index, n_feat
     model_features = '|'.join([strip(feature)
                               for feature in model.tree.features()])
 
-    def pr(y, y_hat):
+    def metrics(y, y_hat):
         tn, fp, fn, tp = confusion_matrix(y, y_hat).ravel()
-        precision = tp / (tp + fp + 0.0000001)
-        recall = tp / (tp + fn + 0.0000001)
-        return precision, recall
+        precision = tp / (tp + fp + 0.000000001)
+        recall = tp / (tp + fn + 0.000000001)
+        fpr = fp / (fp + tn + 0.000000001)
+        return precision, recall, fpr
 
     y_hat_train, y_hat_test = model.predict(
         X_train), model.predict(X_test)
-
-    # PR overall
-    train_precision_overall, train_recall_overall = pr(y_train, y_hat_train)
-    test_precision_overall, test_recall_overall = pr(y_test, y_hat_test)
-
+    
     train_index_p1, test_index_p1, train_index_p2, test_index_p2 = fetch_person_index(
         y_train_index, y_test_index)
 
-    # PR results for person 1.
-    train_precision_p1, train_recall_p1 = pr(
+    # Overall Results
+    train_precision_overall, train_recall_overall, train_fpr_overall = metrics(y_train, y_hat_train)
+    test_precision_overall, test_recall_overall, test_fpr_overall = metrics(y_test, y_hat_test)
+
+    # Results for person 1.
+    train_precision_p1, train_recall_p1, train_fpr_p1 = metrics(
         y_train[train_index_p1], y_hat_train[train_index_p1])
-    test_precision_p1, test_recall_p1 = pr(
+    test_precision_p1, test_recall_p1, test_fpr_p1 = metrics(
         y_test[test_index_p1], y_hat_test[test_index_p1])
 
-    # PR results for person 2.
-    train_precision_p2, train_recall_p2 = pr(
+    # Results for person 2.
+    train_precision_p2, train_recall_p2, train_fpr_p2 = metrics(
         y_train[train_index_p2], y_hat_train[train_index_p2])
-    test_precision_p2, test_recall_p2 = pr(
+    test_precision_p2, test_recall_p2, test_fpr_p2 = metrics(
         y_test[test_index_p2], y_hat_test[test_index_p2])
 
-    first_row = 'n_features,max_thresholds,n_est,max_depth,sample_weight,gosdt_depth,regularization,weight,train_precision,train_recall,test_precision,test_recall,train_precision_p1,train_recall_p1,test_precision_p1,test_recall_p1,train_precision_p2,train_recall_p2,test_precision_p2,test_recall_p2,model_features' + '\n'
+    first_row = """n_features,max_thresholds,n_est,max_depth,sample_weight,gosdt_depth,regularization,weight,
+                train_precision,train_recall,train_fpr,test_precision,test_recall,test_fpr,
+                train_precision_p1,train_recall_p1,train_fpr_p1,test_precision_p1,test_recall_p1,test_fpr_p1,
+                train_precision_p2,train_recall_p2,train_fpr_p2,test_precision_p2,test_recall_p2,test_fpr_p2,
+                model_features""" + '\n'
 
     data_row = [n_features, max_thresholds, n_est, max_depth, sample_weight,
                 gosdt_depth, regularization, weight,
-                train_precision_overall, train_recall_overall, test_precision_overall, test_recall_overall,
-                train_precision_p1, train_recall_p1, test_precision_p1, test_recall_p1,
-                train_precision_p2, train_recall_p2, test_precision_p2, test_recall_p2,
+                train_precision_overall, train_recall_overall, train_fpr_overall, test_precision_overall, test_recall_overall, test_fpr_overall,
+                train_precision_p1, train_recall_p1, train_fpr_p1, test_precision_p1, test_recall_p1, test_fpr_p1,
+                train_precision_p2, train_recall_p2, train_fpr_p2, test_precision_p2, test_recall_p2, test_fpr_p2,
                 model_features]
 
     with open(out + '.csv', 'w') as outfile:
@@ -301,8 +291,8 @@ def main(params, out_folder, out_csv, workers=1):
 
 
 if __name__ == "__main__":
-    kParamPath = '/Users/caleb/Desktop/latency/gosdt_sweep_results/v3/gosdt_sweep_params.json'
-    kOutFolder = '/Users/caleb/Desktop/latency/gosdt_sweep_results/v3/'
+    kParamPath = '/Users/caleb/Desktop/latency/gosdt_sweep_results/v4/gosdt_sweep_params.json'
+    kOutFolder = '/Users/caleb/Desktop/latency/gosdt_sweep_results/v4/'
     kCsvName = 'sweep.csv'
     kNumWorkers = 2
 

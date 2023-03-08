@@ -8,6 +8,7 @@ from sklearn.metrics import roc_curve, auc, confusion_matrix, precision_recall_c
 from sklearn.utils import shuffle
 from helpers import fetch_person_index, load_data, split_data_by_person
 import json
+import pandas as pd
 
 
 def overlay_roc(clf, X_train, X_test, y_train, y_test, type='combined', figpath=None, title=None):
@@ -95,7 +96,7 @@ def fetch_aupr(clf, X_train, X_test, y_train, y_test):
     return train_aupr, test_aupr
 
 
-def permutation_test(clf, X_train, X_test, y_train, y_test, n_shuffles=5):
+def permutation_test(clf, X_train, X_test, y_train, y_test, results_path, n_shuffles=5):
     # 1 - establish baseline
     train_aupr, test_aupr = fetch_aupr(clf, X_train, X_test, y_train, y_test)
 
@@ -113,29 +114,32 @@ def permutation_test(clf, X_train, X_test, y_train, y_test, n_shuffles=5):
         temp_train, temp_test = X_train_iter[feature], X_test_iter[feature]
 
         for _ in range(n_shuffles):
-            X_train_iter[feature] = shuffle(
-                X_train_iter[feature].values, random_state=0)
-            X_test_iter[feature] = shuffle(
-                X_test_iter[feature].values, random_state=0)
+            X_train_iter[feature] = shuffle(X_train_iter[feature].values, random_state=0)
+            X_test_iter[feature] = shuffle(X_test_iter[feature].values, random_state=0)
 
             # Measure aupr
-            train_aupr_iter, test_aupr_iter = fetch_aupr(
-                clf, X_train_iter, X_test_iter, y_train, y_test)
+            train_aupr_iter, test_aupr_iter = fetch_aupr(clf, X_train_iter, X_test_iter, y_train, y_test)
             train_feature_aupr.append(train_aupr_iter)
             test_feature_aupr.append(test_aupr_iter)
-
+        
         # Put temporary copy back
         X_train_iter[feature], X_test_iter[feature] = temp_train, temp_test
-
+        
         # Calculate feature importance
-        train_feature_importance = train_aupr - \
-            sum(train_feature_aupr) / len(train_feature_aupr)
-        test_feature_importance = test_aupr - \
-            sum(test_feature_aupr) / len(test_feature_aupr)
+        train_feature_importance =  train_aupr - sum(train_feature_aupr) / len(train_feature_aupr)
+        test_feature_importance =  test_aupr - sum(test_feature_aupr) / len(test_feature_aupr)
         train_feature_importances.append((feature, train_feature_importance))
-        test_feature_importances.append((feature, train_feature_importance))
+        test_feature_importances.append((feature, test_feature_importance))
+    
+    sorted_train = sorted(train_feature_importances, key=lambda x: x[1], reverse=True)
+    sorted_test = sorted(test_feature_importances, key=lambda x: x[1], reverse=True)
 
-    return train_feature_importances, test_feature_importances
+    df_train  = pd.DataFrame(sorted_train)
+    df_train.columns = ['Feature', 'Train Importance']
+    df_train.to_csv(os.path.join(results_path, 'train_importances.csv'))
+    df_test = pd.DataFrame(sorted_test)
+    df_test.columns = ['Feature', 'Test Importance']
+    df_test.to_csv(os.path.join(results_path, 'test_importances.csv'))
 
 
 def stem_plot(clf, X_train, X_test, y_train, y_test, figpath=None):
@@ -211,7 +215,7 @@ def comparison_pr(clf_combined, clf_p1, clf_p2, X_train, X_test, y_train, y_test
 
     p1, p2 = split_data_by_person(X_train, X_test, y_train, y_test)
 
-    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15.25, 5))
+    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15.5, 5))
     fig.tight_layout()
     plt.style.use('classic')
     plt.suptitle(f"Precision-Recall Curves of XGBoost models", fontsize=21)
@@ -235,13 +239,13 @@ def comparison_pr(clf_combined, clf_p1, clf_p2, X_train, X_test, y_train, y_test
     ax1.set_xlim(0, 1)
     ax1.set_ylim(0, 1)
     ax1.tick_params(right=False, top=False)
-    ax1.set_title("Trained on both subjects", fontsize=16)
+    ax1.set_title("Trained on both donors", fontsize=16)
 
     ax1.plot(overall_test_re_p1, overall_test_pr_p1, linestyle="--", marker=".",
-             markersize=8, c='orange', label=f'Subject 1, Test AUPR = {round(overall_test_p1_aupr, 3)}')
+             markersize=8, c='orange', label=f'Donor 1, Test AUPR = {round(overall_test_p1_aupr, 3)}')
     ax1.plot(overall_test_re_p2, overall_test_pr_p2, linestyle="--", marker=".",
-             markersize=8, c='blue', label=f'Subject 2, Test AUPR = {round(overall_test_p2_aupr, 3)}')
-    ax1.legend(fontsize=16, loc='upper right')
+             markersize=8, c='blue', label=f'Donor 2, Test AUPR = {round(overall_test_p2_aupr, 3)}')
+    ax1.legend(fontsize=16, loc='upper center')
 
     # THEN TRAINING ON P1
 
@@ -262,13 +266,13 @@ def comparison_pr(clf_combined, clf_p1, clf_p2, X_train, X_test, y_train, y_test
     ax2.set_ylim(0, 1)
     ax2.tick_params(bottom=True, labelbottom=True,
                     labelleft=False, left=False, right=False, top=False)
-    ax2.set_title("Trained only on subject 1", fontsize=16)
+    ax2.set_title("Trained only on donor 1", fontsize=16)
 
     ax2.plot(p1_test_re_p1, p1_test_pr_p1, linestyle="--", marker=".",
-             markersize=8, c='orange', label=f'Subject 1, Test AUPR = {round(p1_test_p1_aupr, 3)}')
+             markersize=8, c='orange', label=f'Donor 1, Test AUPR = {round(p1_test_p1_aupr, 3)}')
     ax2.plot(p1_test_re_p2, p1_test_pr_p2, linestyle="--", marker=".",
-             markersize=8, c='blue', label=f'Subject 2, Test AUPR = {round(p1_test_p2_aupr, 3)}')
-    ax2.legend(fontsize=16, loc='upper right')
+             markersize=8, c='blue', label=f'Donor 2, Test AUPR = {round(p1_test_p2_aupr, 3)}')
+    ax2.legend(fontsize=16, loc='upper center')
 
     # THEN TRAINING ON P2
 
@@ -289,13 +293,13 @@ def comparison_pr(clf_combined, clf_p1, clf_p2, X_train, X_test, y_train, y_test
     ax3.set_ylim(0, 1)
     ax3.tick_params(bottom=True, labelbottom=True,
                     labelleft=False, left=False, right=False, top=False)
-    ax3.set_title("Trained only on subject 2", fontsize=16)
+    ax3.set_title("Trained only on donor 2", fontsize=16)
 
     ax3.plot(p2_test_re_p1, p2_test_pr_p1, linestyle="--", marker=".",
-             markersize=8, c='orange', label=f'Subject 1, Test AUPR = {round(p2_test_p1_aupr, 3)}')
+             markersize=8, c='orange', label=f'Donor 1, Test AUPR = {round(p2_test_p1_aupr, 3)}')
     ax3.plot(p2_test_re_p2, p2_test_pr_p2, linestyle="--", marker=".",
-             markersize=8, c='blue', label=f'Subject 2, Test AUPR = {round(p2_test_p2_aupr, 3)}')
-    ax3.legend(fontsize=16, loc='upper right')
+             markersize=8, c='blue', label=f'Donor 2, Test AUPR = {round(p2_test_p2_aupr, 3)}')
+    ax3.legend(fontsize=16, loc='upper center')
 
     # Save the figure
     if figpath:
@@ -305,11 +309,12 @@ def comparison_pr(clf_combined, clf_p1, clf_p2, X_train, X_test, y_train, y_test
                     "comparison_xgb_pr.pdf"), bbox_inches='tight', dpi=300)
 
 
-def comparison_roc(clf_combined, clf_p1, clf_p2, X_train, X_test, y_train, y_test, figpath=None):
+
+def comparison_roc(clf_combined, clf_p1, clf_p2, X_train, X_test, y_train, y_test, train_curve=True, figpath=None):
 
     p1, p2 = split_data_by_person(X_train, X_test, y_train, y_test)
 
-    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15.25, 5))
+    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15.5, 5))
     fig.tight_layout()
     plt.style.use('classic')
     plt.suptitle(f"ROC Curves of XGBoost models", fontsize=21)
@@ -333,13 +338,22 @@ def comparison_roc(clf_combined, clf_p1, clf_p2, X_train, X_test, y_train, y_tes
     ax1.set_xlim(0, 1)
     ax1.set_ylim(0, 1)
     ax1.tick_params(right=False, top=False)
-    ax1.set_title("Trained on both subjects", fontsize=16)
+    ax1.set_title("Trained on both donors", fontsize=16)
 
     ax1.plot(overall_test_fpr_p1, overall_test_tpr_p1, linestyle="--", marker=".",
-             markersize=8, c='orange', label=f'Subject 1, Test AUC = {round(overall_test_p1_auc, 3)}')
+             markersize=8, c='orange', label=f'Donor 1, Test AUC = {round(overall_test_p1_auc, 3)}')
     ax1.plot(overall_test_fpr_p2, overall_test_tpr_p2, linestyle="--", marker=".",
-             markersize=8, c='blue', label=f'Subject 2, Test AUC = {round(overall_test_p2_auc, 3)}')
-    ax1.legend(fontsize=16, loc='upper right')
+             markersize=8, c='blue', label=f'Donor 2, Test AUC = {round(overall_test_p2_auc, 3)}')
+    
+    if train_curve:
+        overall_y_hat_train = clf_combined.predict_proba(X_train)[:, 1]
+        overall_train_fpr, overall_test_tpr, test_thresholds = roc_curve(
+            y_train, overall_y_hat_train)
+        overall_train_auc = auc(overall_train_fpr, overall_test_tpr)
+        ax1.plot(overall_train_fpr, overall_test_tpr, linestyle="--", marker=".",
+            markersize=8, c='green', label=f'Train AUC = {round(overall_train_auc, 3)}')
+
+    ax1.legend(fontsize=16, loc='lower right')
 
     # THEN TRAINING ON P1
 
@@ -360,13 +374,22 @@ def comparison_roc(clf_combined, clf_p1, clf_p2, X_train, X_test, y_train, y_tes
     ax2.set_ylim(0, 1)
     ax2.tick_params(bottom=True, labelbottom=True,
                     labelleft=False, left=False, right=False, top=False)
-    ax2.set_title("Trained only on subject 1", fontsize=16)
+    ax2.set_title("Trained only on donor 1", fontsize=16)
 
     ax2.plot(p1_test_fpr_p1, p1_test_tpr_p1, linestyle="--", marker=".",
-             markersize=8, c='orange', label=f'Subject 1, Test AUC = {round(p1_test_p1_auc, 3)}')
+             markersize=8, c='orange', label=f'Donor 1, Test AUC = {round(p1_test_p1_auc, 3)}')
     ax2.plot(p1_test_fpr_p2, p1_test_tpr_p2, linestyle="--", marker=".",
-             markersize=8, c='blue', label=f'Subject 2, Test AUC = {round(p1_test_p2_auc, 3)}')
-    ax2.legend(fontsize=16, loc='upper right')
+             markersize=8, c='blue', label=f'Donor 2, Test AUC = {round(p1_test_p2_auc, 3)}')
+    
+    if train_curve:
+        p1_y_hat_train_p1 = clf_combined.predict_proba(p1.X_train)[:, 1]
+        p1_train_fpr_p1, p1_train_tpr_p1, test_thresholds = roc_curve(
+            p1.y_train, p1_y_hat_train_p1)
+        overall_train_auc_p1 = auc(p1_train_fpr_p1, p1_train_tpr_p1)
+        ax2.plot(p1_train_fpr_p1, p1_train_tpr_p1, linestyle="--", marker=".",
+            markersize=8, c='green', label=f'Train AUC = {round(overall_train_auc_p1, 3)}')
+
+    ax2.legend(fontsize=16, loc='lower right')
 
     # THEN TRAINING ON P2
 
@@ -387,20 +410,33 @@ def comparison_roc(clf_combined, clf_p1, clf_p2, X_train, X_test, y_train, y_tes
     ax3.set_ylim(0, 1)
     ax3.tick_params(bottom=True, labelbottom=True,
                     labelleft=False, left=False, right=False, top=False)
-    ax3.set_title("Trained only on subject 2", fontsize=16)
+    ax3.set_title("Trained only on donor 2", fontsize=16)
 
     ax3.plot(p2_test_fpr_p1, p2_test_tpr_p1, linestyle="--", marker=".",
-             markersize=8, c='orange', label=f'Subject 1, Test AUC = {round(p2_test_p1_auc, 3)}')
+             markersize=8, c='orange', label=f'Donor 1, Test AUC = {round(p2_test_p1_auc, 3)}')
     ax3.plot(p2_test_fpr_p2, p2_test_tpr_p2, linestyle="--", marker=".",
-             markersize=8, c='blue', label=f'Subject 2, Test AUC = {round(p2_test_p2_auc, 3)}')
-    ax3.legend(fontsize=16, loc='upper right')
+             markersize=8, c='blue', label=f'Donor 2, Test AUC = {round(p2_test_p2_auc, 3)}')
+    
+    if train_curve:
+        p2_y_hat_train_p2 = clf_combined.predict_proba(p2.X_train)[:, 1]
+        p2_train_fpr_p2, p2_train_tpr_p2, test_thresholds = roc_curve(
+            p2.y_train, p2_y_hat_train_p2)
+        overall_train_auc_p2 = auc(p2_train_fpr_p2, p2_train_tpr_p2)
+        ax3.plot(p2_train_fpr_p2, p2_train_tpr_p2, linestyle="--", marker=".",
+            markersize=8, c='green', label=f'Train AUC = {round(overall_train_auc_p2, 3)}')
+
+    ax3.legend(fontsize=16, loc='lower right')
 
     # Save the figure
     if figpath:
+        name = "comparison_xgb_roc"
+        if train_curve:
+            name += "_with_train_curve"
+
         fig.savefig(os.path.join(os.getcwd(), figpath,
-                    "comparison_xgb_roc.png"), bbox_inches='tight', dpi=300)
+                    name + ".png"), bbox_inches='tight', dpi=300)
         fig.savefig(os.path.join(os.getcwd(), figpath,
-                    "comparison_xgb_roc.pdf"), bbox_inches='tight', dpi=300)
+                    name + ".pdf"), bbox_inches='tight', dpi=300)
 
 
 def pr(y, y_hat):
@@ -452,6 +488,9 @@ def main():
     clf_p2 = xgb.XGBClassifier()
     clf_p2.load_model(os.path.join(out, "xgboost_model_p2.json"))
 
+    # Note - permutation test takes a long time to run -- uncomment to run
+    #permutation_test(clf_combined, X_train, X_test, y_train, y_test, results_path=out, n_shuffles=5)
+
     # Create the graphs!
     overlay_pr(clf_combined, X_train, X_test, y_train,
                y_test, type='overall', figpath=kFigsDir)
@@ -462,7 +501,9 @@ def main():
     comparison_pr(clf_combined, clf_p1, clf_p2, X_train,
                   X_test, y_train, y_test, figpath=kFigsDir)
     comparison_roc(clf_combined, clf_p1, clf_p2, X_train,
-                   X_test, y_train, y_test, figpath=kFigsDir)
+                   X_test, y_train, y_test, train_curve=False, figpath=kFigsDir)
+    comparison_roc(clf_combined, clf_p1, clf_p2, X_train,
+                   X_test, y_train, y_test, train_curve=True, figpath=kFigsDir)
 
 
 if __name__ == "__main__":
