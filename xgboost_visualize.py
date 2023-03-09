@@ -83,6 +83,60 @@ def overlay_pr(clf, X_train, X_test, y_train, y_test, type='combined', figpath=N
         fig.savefig(os.path.join(os.getcwd(), figpath, name +
                     ".pdf"), bbox_inches='tight', dpi=300)
 
+def fetch_auc(clf, X_train, X_test, y_train, y_test):
+    y_hat_train = clf.predict_proba(X_train)[:, 1]
+    y_hat_test = clf.predict_proba(X_test)[:, 1]
+    train_fpr, train_tpr, train_thresholds = roc_curve(y_train, y_hat_train)
+    test_fpr, test_tpr, test_thresholds = roc_curve(y_test, y_hat_test)
+    train_auc = auc(train_fpr, train_tpr)
+    test_auc = auc(test_fpr, test_tpr)
+    return train_auc, test_auc
+
+
+def permutation_test_auc(clf, X_train, X_test, y_train, y_test, results_path, n_shuffles=5):
+    # 1 - establish baseline
+    train_auc, test_auc = fetch_auc(clf, X_train, X_test, y_train, y_test)
+
+    # 2 - iterate through the features and permute the features
+    X_train_iter, X_test_iter = X_train.copy(), X_test.copy()
+    train_feature_importances = []
+    test_feature_importances = []
+
+    for feature in tqdm(X_train.columns):
+        # average the feature importance over n_shuffles
+        train_feature_auc = []
+        test_feature_auc = []
+
+        # Hold a temporary copy of the original.
+        temp_train, temp_test = X_train_iter[feature], X_test_iter[feature]
+
+        for _ in range(n_shuffles):
+            X_train_iter[feature] = shuffle(X_train_iter[feature].values, random_state=0)
+            X_test_iter[feature] = shuffle(X_test_iter[feature].values, random_state=0)
+
+            # Measure auc
+            train_auc_iter, test_auc_iter = fetch_auc(clf, X_train_iter, X_test_iter, y_train, y_test)
+            train_feature_auc.append(train_auc_iter)
+            test_feature_auc.append(test_auc_iter)
+        
+        # Put temporary copy back
+        X_train_iter[feature], X_test_iter[feature] = temp_train, temp_test
+        
+        # Calculate feature importance
+        train_feature_importance =  train_auc - sum(train_feature_auc) / len(train_feature_auc)
+        test_feature_importance =  test_auc - sum(test_feature_auc) / len(test_feature_auc)
+        train_feature_importances.append((feature, train_feature_importance))
+        test_feature_importances.append((feature, test_feature_importance))
+    
+    sorted_train = sorted(train_feature_importances, key=lambda x: x[1], reverse=True)
+    sorted_test = sorted(test_feature_importances, key=lambda x: x[1], reverse=True)
+
+    df_train  = pd.DataFrame(sorted_train)
+    df_train.columns = ['Feature', 'Train Importance']
+    df_train.to_csv(os.path.join(results_path, 'roc_auc_train_importances.csv'))
+    df_test = pd.DataFrame(sorted_test)
+    df_test.columns = ['Feature', 'Test Importance']
+    df_test.to_csv(os.path.join(results_path, 'roc_auc_test_importances.csv'))
 
 def fetch_aupr(clf, X_train, X_test, y_train, y_test):
     y_hat_train = clf.predict_proba(X_train)[:, 1]
@@ -95,8 +149,7 @@ def fetch_aupr(clf, X_train, X_test, y_train, y_test):
     test_aupr = auc(test_re, test_pr)
     return train_aupr, test_aupr
 
-
-def permutation_test(clf, X_train, X_test, y_train, y_test, results_path, n_shuffles=5):
+def permutation_test_aupr(clf, X_train, X_test, y_train, y_test, results_path, n_shuffles=5):
     # 1 - establish baseline
     train_aupr, test_aupr = fetch_aupr(clf, X_train, X_test, y_train, y_test)
 
@@ -136,10 +189,10 @@ def permutation_test(clf, X_train, X_test, y_train, y_test, results_path, n_shuf
 
     df_train  = pd.DataFrame(sorted_train)
     df_train.columns = ['Feature', 'Train Importance']
-    df_train.to_csv(os.path.join(results_path, 'train_importances.csv'))
+    df_train.to_csv(os.path.join(results_path, 'aupr_train_importances.csv'))
     df_test = pd.DataFrame(sorted_test)
     df_test.columns = ['Feature', 'Test Importance']
-    df_test.to_csv(os.path.join(results_path, 'test_importances.csv'))
+    df_test.to_csv(os.path.join(results_path, 'aupr_test_importances.csv'))
 
 
 def stem_plot(clf, X_train, X_test, y_train, y_test, figpath=None):
@@ -471,7 +524,7 @@ def results_by_person(clf, X_train, X_test, y_train, y_test):
 
 
 def main():
-    kFigsDir = f'graphics/v3/xgboost'
+    kFigsDir = f'graphics/v4/xgboost'
     out = f'xgb_results/v3'
 
     os.makedirs(kFigsDir, exist_ok=True)
@@ -488,9 +541,6 @@ def main():
     clf_p2 = xgb.XGBClassifier()
     clf_p2.load_model(os.path.join(out, "xgboost_model_p2.json"))
 
-    # Note - permutation test takes a long time to run -- uncomment to run
-    #permutation_test(clf_combined, X_train, X_test, y_train, y_test, results_path=out, n_shuffles=5)
-
     # Create the graphs!
     overlay_pr(clf_combined, X_train, X_test, y_train,
                y_test, type='overall', figpath=kFigsDir)
@@ -504,6 +554,8 @@ def main():
                    X_test, y_train, y_test, train_curve=False, figpath=kFigsDir)
     comparison_roc(clf_combined, clf_p1, clf_p2, X_train,
                    X_test, y_train, y_test, train_curve=True, figpath=kFigsDir)
+    permutation_test_auc(clf_combined, X_train, X_test, y_train, y_test, results_path=out, n_shuffles=5)
+    # permutation_test_aupr(clf_combined, X_train, X_test, y_train, y_test, results_path=out, n_shuffles=5)
 
 
 if __name__ == "__main__":

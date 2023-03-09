@@ -151,11 +151,7 @@ def gosdt_(X_train, y_train, X_test, y_test, y_train_index, y_test_index, n_feat
     test_precision_p2, test_recall_p2, test_fpr_p2 = metrics(
         y_test[test_index_p2], y_hat_test[test_index_p2])
 
-    first_row = """n_features,max_thresholds,n_est,max_depth,sample_weight,gosdt_depth,regularization,weight,
-                train_precision,train_recall,train_fpr,test_precision,test_recall,test_fpr,
-                train_precision_p1,train_recall_p1,train_fpr_p1,test_precision_p1,test_recall_p1,test_fpr_p1,
-                train_precision_p2,train_recall_p2,train_fpr_p2,test_precision_p2,test_recall_p2,test_fpr_p2,
-                model_features""" + '\n'
+    first_row = "n_features,max_thresholds,n_est,max_depth,sample_weight,gosdt_depth,regularization,weight,train_precision,train_recall,train_fpr,test_precision,test_recall,test_fpr,train_precision_p1,train_recall_p1,train_fpr_p1,test_precision_p1,test_recall_p1,test_fpr_p1,train_precision_p2,train_recall_p2,train_fpr_p2,test_precision_p2,test_recall_p2,test_fpr_p2,model_features" + '\n'
 
     data_row = [n_features, max_thresholds, n_est, max_depth, sample_weight,
                 gosdt_depth, regularization, weight,
@@ -269,17 +265,19 @@ def main(params, out_folder, out_csv, workers=1):
             try:
                 gosdt_path = config2name(kGosdtOutFolder, n_features, max_thresholds, n_est,
                                          max_depth, sample_weight, gosdt_depth, regularization, weight) + '.csv'
+                print(gosdt_path)
                 results = pd.read_csv(gosdt_path)
                 cumulative_results.append(results.iloc[0].values)
+                print("HERE")
             except:
                 ("FAILED")
 
     final_results = pd.DataFrame(cumulative_results)
     final_results.columns = ['n_features', 'max_thresholds', 'n_est', 'max_depth',
                              'sample_weight', 'gosdt_depth', 'regularization', 'weight',
-                             'train_precision', 'train_recall', 'test_precision', 'test_recall',
-                             'train_precision_p1', 'train_recall_p1', 'test_precision_p1', 'test_recall_p1',
-                             'train_precision_p2', 'train_recall_p2', 'test_precision_p2', 'test_recall_p2',
+                             'train_precision', 'train_fpr_overall', 'train_recall', 'test_precision', 'test_recall', 'test_fpr_overall',
+                             'train_precision_p1', 'train_recall_p1', 'train_fpr_p1', 'test_precision_p1', 'test_recall_p1', 'test_fpr_p1',
+                             'train_precision_p2', 'train_recall_p2', 'train_fpr_p2', 'test_precision_p2', 'test_recall_p2', 'test_fpr_p2',
                              'model_features']
 
     csv_path = os.path.join(out_folder, out_csv)
