@@ -48,11 +48,9 @@ def fetch_train_test_indices(n_samples, save=True):
 
 
 def create_merged_motif():
-    # Motif observations from
-
-    # Observation names
-    columns = from_txt('data/base/v1/rna.mat.colnames.txt', numerical=False) + \
-        from_txt('data/base/v2/rna.mat.colnames.txt', numerical=False)
+    # Observation names, ex: "AAACAGCCAAACTAAG-2"
+    columns = from_txt('data/base/v1/motif.mat.colnames.txt', numerical=False) + \
+        from_txt('data/base/v2/motif.mat.colnames.txt', numerical=False)
 
     v1 = from_txt('data/base/v1/motif.mat.rownames.txt', numerical=False)
     v2 = from_txt('data/base/v2/motif.mat.rownames.txt', numerical=False)
@@ -96,7 +94,7 @@ def create_merged_rna():
 
     combined = pd.concat([r1, r2], join='inner')
 
-    # transpose back
+    # Transpose back the DataFrame
     combined = combined.T
 
     with open('data/base/combined/rna.mat.rownames.txt', 'w') as f:
@@ -111,7 +109,7 @@ def create_merged_rna():
 
 
 def calculate_spearman(version, train_indices):
-    # Used for either the V1 data or the V2 data, but not the combined data
+    # Used for either JUST the V1 data or the V2 data, but not the combined data.
     data = []
     columns = ['feature', 'dataset', 'spearman', 'abs_spearman', 'pvalue']
 
@@ -162,7 +160,7 @@ def calculate_spearman(version, train_indices):
 
 def calculate_combined_spearman(train_indices):
     # Used for the combined data, not for V1 or V2 alone.
-    # This is because the combined data
+    # This is because the combined data does not include ATAC.
     data = []
     columns = ['feature', 'dataset', 'spearman', 'abs_spearman', 'pvalue']
 
@@ -193,7 +191,7 @@ def calculate_combined_spearman(train_indices):
 
     df = pd.DataFrame(data, columns=columns).sort_values(
         by='abs_spearman', ascending=False)
-    df.to_csv(f'data/processed/spearman_combined.csv', index=False)
+    df.to_csv(f'data/processed/combined/spearman_combined.csv', index=False)
     print(f"Wrote spearman combined .csv")
 
 
@@ -216,7 +214,7 @@ def load_train_test_indices(version='combined'):
 def select_top_features(n=50, type=None, version='combined'):
     df = pd.read_csv(f'data/processed/{version}/spearman_{version}.csv')
     features = list(df.feature)
-    # what type of feature it is
+    # What type of feature it is
     feature_types = list(df.dataset)
 
     def include(feature, feature_type=None):
@@ -296,26 +294,31 @@ def split_train_test(train_out, test_out, feature_names, version):
 
 
 if __name__ == "__main__":
-    # Make the out directory for processed metrics
-    os.makedirs('data/processed/combined', exist_ok=True)
+    # # Make the out directory for processed metrics
+    # os.makedirs('data/processed/combined', exist_ok=True)
 
-    # 1) Generate train and test indices
-    n_samples_v1 = 61708
-    n_samples_v2 = 30831
-    train_indices, test_indices = fetch_train_test_indices(
-        n_samples_v1 + n_samples_v2, save=True)
+    # # 1) Generate train and test indices
+    # n_samples_v1 = 61708
+    # n_samples_v2 = 30831
+    # train_indices, test_indices = fetch_train_test_indices(
+    #     n_samples_v1 + n_samples_v2, save=True)
+    # print("Generated train and test indices")
 
-    # 2) Generate merged dataset
-    # note -- ATAC not merged as features not aligned
-    # note note -- this can take a while due to large I/O and memory need!
-    create_merged_rna()
-    create_merged_motif()
+    # # 2) Generate merged dataset
+    # # note -- ATAC not merged
+    # # note note -- this can take a while due to large I/O and memory need!
+    # print("Beginning to merge Motif and RNA datasets (this can take a while)")
+    # create_merged_rna()
+    # create_merged_motif()
+    # print("Merged the Motif and Rna datasets")
 
-    # 3) Find HIV values to calculate spearman against
-    scrape_hiv()
+    # # 3) Find HIV values to calculate spearman against
+    # scrape_hiv()
+    # print("Scraped HIV labels")
 
-    # 4) Calculate spearman coefficients for all features against HIV using the train data
-    calculate_combined_spearman(train_indices)
+    # # 4) Calculate spearman coefficients for all features against HIV using the train data
+    # calculate_combined_spearman(train_indices)
+    # print("Calculated Spearman")
 
     # 5) Select features (ranked by absolute spearman correlation) for the top 2000 overall
     #    and write these features to a csv.
@@ -326,9 +329,6 @@ if __name__ == "__main__":
 
     for version in ['combined']:
         overall = select_top_features(2000, version=version)
-        # rna = select_top_features(50, type='rna', version=version)
-        # motif = select_top_features(50, type='motif', version=version)
-        # atac = select_top_features(50, type='atac', version=version)
         train, test = load_train_test_indices(version=version)
         split_labels(train, test, version=version)
 
@@ -339,5 +339,7 @@ if __name__ == "__main__":
             test_out = os.path.join(
                 'data', 'processed', version, data_type + "_test.csv")
             split_train_test(train_out, test_out, feature_names, version)
-
+    print("Generated dataset of top features and split it into training and testing sets")
+    # For HIV add a label corresponding to whether the observations are in the top 10% of HIV values.
     add_label('10', top_10_percent)
+    print("Added a label corresponding to the top 10 percent of HIV values")

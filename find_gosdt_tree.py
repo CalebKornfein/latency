@@ -7,7 +7,6 @@ from gosdt_sweep import config2name
 from threshold_guess import cut
 from helpers import load_data
 
-
 def trace(gosdt):
     # Iterates through the model JSON in pre-order traversal and scrapes the paths,
     # returning a list of tuples representing the boolean conditions necessary to reach
@@ -36,7 +35,6 @@ def trace(gosdt):
 
     return lp
 
-
 def calc_leave_accuracies(leave_paths, X_test, y_test, sweep_row):
 
     def predicate(row, path):
@@ -46,6 +44,8 @@ def calc_leave_accuracies(leave_paths, X_test, y_test, sweep_row):
         return True
 
     total_correct = 0
+    total_guess_pos = 0
+
 
     for path in leave_paths:
         prediction = path[-1]
@@ -62,18 +62,14 @@ def calc_leave_accuracies(leave_paths, X_test, y_test, sweep_row):
                         total_correct += 1
                 n += 1
 
-        print(f"PREDICTED {prediction}", path,
-              f"ACCURACY: {correct / n}, N = {n}")
+        print(f"PREDICTED {prediction}", path, f"ACCURACY: {correct / n}, N = {n}")
 
-    print(
-        f"FOUND OVERALL RECALL: {total_correct / sum(y_test)} VS SAVED RECALL: {sweep_row['test_recall']}")
-
+    print(f"FOUND OVERALL RECALL: {total_correct / sum(y_test)} VS SAVED RECALL: {sweep_row['test_recall']}")
 
 def search_for_good_gosdt_model(dir, verbose=False):
     sweep = pd.read_csv(os.path.join(dir, "sweep.csv"))
 
-    idx = np.where((sweep['test_precision'] > 0.35)
-                   & (sweep['test_recall'] > 0.1))
+    idx = np.where((sweep['test_precision'] > 0.35) & (sweep['test_recall'] > 0.40))
 
     if verbose:
         for i in idx[0]:
@@ -87,7 +83,6 @@ def search_for_good_gosdt_model(dir, verbose=False):
     # 1613 --> (P/R) was 0.356, 0.142
     # 1743 --> (P/R) was 0.270, 0.255
 
-
 def fetch_gosdt_tree(sweep, i, dir, X_test, y_test):
     print(f'------- fetching {i} ----------')
     row = sweep.iloc[i]
@@ -95,25 +90,23 @@ def fetch_gosdt_tree(sweep, i, dir, X_test, y_test):
 
     # Find the file paths for the relevant threshold guess and gosdt model
     tg_name = f"THRESHOLD_GUESS_NF_{int(row['n_features'])}_MT_{int(row['max_thresholds'])}_NEST_{int(row['n_est'])}_MD_{int(row['max_depth'])}_SW_{row['sample_weight']}.json"
-    relevant_threshold_guess = os.path.join(dir,
+    relevant_threshold_guess = os.path.join(dir, 
                                             'threshold_guess',
                                             tg_name)
     gosdt_name = config2name(dir + '/gosdt', int(row['n_features']), int(row['max_thresholds']), int(row['n_est']), int(row['max_depth']),
-                             row['sample_weight'], int(
-                                 row['gosdt_depth']), row['regularization'],
-                             row['weight'])
+                                    row['sample_weight'], int(row['gosdt_depth']), row['regularization'], 
+                                    row['weight'])
     relevant_gosdt = gosdt_name + ".json"
 
-    print('-------')
+    print ('-------')
     print(relevant_threshold_guess)
     print(relevant_gosdt)
-    print('-------')
+    print ('-------')
 
     # load the appropriate items
     threshold_guess = json.load(open(relevant_threshold_guess, "r"))
 
-    X_test_tg = cut(X_test.copy(), threshold_guess['thresholds'])[
-        threshold_guess['header']]
+    X_test_tg = cut(X_test.copy(), threshold_guess['thresholds'])[threshold_guess['header']]
     X_test_tg = X_test_tg.reset_index(drop=True)
 
     gosdt = GOSDT()
@@ -121,7 +114,6 @@ def fetch_gosdt_tree(sweep, i, dir, X_test, y_test):
 
     lp = trace(gosdt)
     calc_leave_accuracies(lp, X_test_tg, y_test, row)
-
 
 def main():
     kSweepPath = 'gosdt_sweep_results/v3/sweep.csv'
@@ -134,4 +126,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+        main()

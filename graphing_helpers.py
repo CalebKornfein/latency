@@ -1,8 +1,6 @@
 import matplotlib.pyplot as plt
-import numpy as np
-import seaborn as sns
 import os
-from sklearn.metrics import roc_curve, auc, f1_score, mean_squared_error, zero_one_loss, precision_recall_curve
+from sklearn.metrics import roc_curve, auc, precision_recall_curve
 
 
 def overlay_roc(clf, X_train, X_test, y_train, y_test, type='combined', figpath=None, title=None):

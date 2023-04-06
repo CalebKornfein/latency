@@ -1,10 +1,5 @@
 import pandas as pd
-import os
 import json
-import matplotlib.pyplot as plt
-import numpy as np
-from sklearn.metrics import roc_curve, auc
-import seaborn as sns
 import math
 import json
 from collections import namedtuple

@@ -1,17 +1,13 @@
 import os
 import pandas as pd
-import numpy as np
 import json
-import time
-import pathlib
 import multiprocessing as mp
 import gosdt.libgosdt as gosdt
 from imblearn.over_sampling import RandomOverSampler
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.ensemble import GradientBoostingClassifier
-from sklearn.metrics import roc_auc_score, accuracy_score, balanced_accuracy_score, precision_score, confusion_matrix
+from sklearn.metrics import confusion_matrix
 from gosdt.model.gosdt import GOSDT
 from helpers import load_data, fetch_person_index
+# GOSDT sweep relies on a modified form of the threshold_guess procedure NOT from the GOSDT library
 from threshold_guess import *
 from itertools import product
 
@@ -131,13 +127,15 @@ def gosdt_(X_train, y_train, X_test, y_test, y_train_index, y_test_index, n_feat
 
     y_hat_train, y_hat_test = model.predict(
         X_train), model.predict(X_test)
-    
+
     train_index_p1, test_index_p1, train_index_p2, test_index_p2 = fetch_person_index(
         y_train_index, y_test_index)
 
     # Overall Results
-    train_precision_overall, train_recall_overall, train_fpr_overall = metrics(y_train, y_hat_train)
-    test_precision_overall, test_recall_overall, test_fpr_overall = metrics(y_test, y_hat_test)
+    train_precision_overall, train_recall_overall, train_fpr_overall = metrics(
+        y_train, y_hat_train)
+    test_precision_overall, test_recall_overall, test_fpr_overall = metrics(
+        y_test, y_hat_test)
 
     # Results for person 1.
     train_precision_p1, train_recall_p1, train_fpr_p1 = metrics(
@@ -151,14 +149,14 @@ def gosdt_(X_train, y_train, X_test, y_test, y_train_index, y_test_index, n_feat
     test_precision_p2, test_recall_p2, test_fpr_p2 = metrics(
         y_test[test_index_p2], y_hat_test[test_index_p2])
 
-    first_row = "n_features,max_thresholds,n_est,max_depth,sample_weight,gosdt_depth,regularization,weight,train_precision,train_recall,train_fpr,test_precision,test_recall,test_fpr,train_precision_p1,train_recall_p1,train_fpr_p1,test_precision_p1,test_recall_p1,test_fpr_p1,train_precision_p2,train_recall_p2,train_fpr_p2,test_precision_p2,test_recall_p2,test_fpr_p2,model_features" + '\n'
+    first_row = 'n_features,max_thresholds,n_est,max_depth,sample_weight,gosdt_depth,regularization,weight,train_precision,train_recall,test_precision,test_recall,train_precision_p1,train_recall_p1,test_precision_p1,test_recall_p1,train_precision_p2,train_recall_p2,test_precision_p2,test_recall_p2,model_features,train_fpr,test_fpr,train_fpr_p1,test_fpr_p1,train_fpr_p2,test_fpr_p2' + '\n'
 
     data_row = [n_features, max_thresholds, n_est, max_depth, sample_weight,
                 gosdt_depth, regularization, weight,
-                train_precision_overall, train_recall_overall, train_fpr_overall, test_precision_overall, test_recall_overall, test_fpr_overall,
-                train_precision_p1, train_recall_p1, train_fpr_p1, test_precision_p1, test_recall_p1, test_fpr_p1,
-                train_precision_p2, train_recall_p2, train_fpr_p2, test_precision_p2, test_recall_p2, test_fpr_p2,
-                model_features]
+                train_precision_overall, train_recall_overall, test_precision_overall, test_recall_overall,
+                train_precision_p1, train_recall_p1, test_precision_p1, test_recall_p1,
+                train_precision_p2, train_recall_p2, test_precision_p2, test_recall_p2, model_features,
+                train_fpr_overall, test_fpr_overall, train_fpr_p1, test_fpr_p1, train_fpr_p2, test_fpr_p2]
 
     with open(out + '.csv', 'w') as outfile:
         outfile.write(first_row)
@@ -265,20 +263,18 @@ def main(params, out_folder, out_csv, workers=1):
             try:
                 gosdt_path = config2name(kGosdtOutFolder, n_features, max_thresholds, n_est,
                                          max_depth, sample_weight, gosdt_depth, regularization, weight) + '.csv'
-                print(gosdt_path)
                 results = pd.read_csv(gosdt_path)
                 cumulative_results.append(results.iloc[0].values)
-                print("HERE")
             except:
                 ("FAILED")
 
     final_results = pd.DataFrame(cumulative_results)
     final_results.columns = ['n_features', 'max_thresholds', 'n_est', 'max_depth',
                              'sample_weight', 'gosdt_depth', 'regularization', 'weight',
-                             'train_precision', 'train_fpr_overall', 'train_recall', 'test_precision', 'test_recall', 'test_fpr_overall',
-                             'train_precision_p1', 'train_recall_p1', 'train_fpr_p1', 'test_precision_p1', 'test_recall_p1', 'test_fpr_p1',
-                             'train_precision_p2', 'train_recall_p2', 'train_fpr_p2', 'test_precision_p2', 'test_recall_p2', 'test_fpr_p2',
-                             'model_features']
+                             'train_precision', 'train_recall', 'test_precision', 'test_recall',
+                             'train_precision_p1', 'train_recall_p1', 'test_precision_p1', 'test_recall_p1',
+                             'train_precision_p2', 'train_recall_p2', 'test_precision_p2', 'test_recall_p2', 'model_features',
+                             'train_fpr_overall', 'test_fpr_overall', 'train_fpr_p1', 'test_fpr_p1', 'train_fpr_p2', 'test_fpr_p2']
 
     csv_path = os.path.join(out_folder, out_csv)
     final_results.to_csv(csv_path, index=False)
@@ -289,8 +285,8 @@ def main(params, out_folder, out_csv, workers=1):
 
 
 if __name__ == "__main__":
-    kParamPath = '/Users/caleb/Desktop/latency/gosdt_sweep_results/v4/gosdt_sweep_params.json'
-    kOutFolder = '/Users/caleb/Desktop/latency/gosdt_sweep_results/v4/'
+    kParamPath = 'gosdt_sweep_params.json'
+    kOutFolder = 'gosdt_sweep_results/v6_confirm/'
     kCsvName = 'sweep.csv'
     kNumWorkers = 2
 

@@ -42,7 +42,6 @@ def get_thresholds(X, y, n_est, lr, d, max_thresholds, weight=None, backselect=T
     y = np.ravel(y)
     # X is a dataframe
     clf, out = fit_boosted_tree(X, y, n_est, lr, d, weight)
-    # print('acc:', out, 'acc cv:', score.mean())
     thresholds = []
     for j in range(X.shape[1]):
         tj = np.array([])
@@ -55,7 +54,6 @@ def get_thresholds(X, y, n_est, lr, d, max_thresholds, weight=None, backselect=T
 
     X_new = cut(X, thresholds)
     clf1, out1 = fit_boosted_tree(X_new, y, n_est, lr, d, weight)
-    # print('acc','1:', out1, 'acc1 cv:', scorep.mean())
 
     # Perform backselection until performance degrades.
     # IF after backselection, number of thresholds > max_thresholds,

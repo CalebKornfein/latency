@@ -4,9 +4,6 @@ import seaborn as sns
 from collections import Counter
 import numpy as np
 import os
-import json
-from gosdt_sweep import name2config, config2name
-
 
 def aggregate(l):
     l = l.dropna()
@@ -95,40 +92,37 @@ def style_pr_curve_by_person(train_precision, train_recall, test_precision_p1, t
     ax.set_xlabel("Recall", fontsize=16)
     ax.set_ylabel("Precision", fontsize=16)
     ax.set_title(
-        "Precision-recall curve of GOSDT models by subject", fontsize=16, pad=14)
+        "Precision-recall curve of GOSDT models by donor", fontsize=16, pad=14)
     ax.tick_params(right=False, top=False)
 
     plt.scatter(train_recall, train_precision,
                 alpha=0.7, s=20, c="blue", label='Train Prediction')
     plt.scatter(test_recall_p1, test_precision_p1,
-                alpha=0.7, s=20, c="red", label='Test Prediction Subject 1')
+                alpha=0.7, s=20, c="red", label='Test Prediction Donor 1')
     plt.scatter(test_recall_p2, test_precision_p2,
-                alpha=0.7, s=20, c="gold", label='Test Prediction Subject 2')
+                alpha=0.7, s=20, c="gold", label='Test Prediction Donor 2')
 
     plt.legend(fontsize=16)
 
     fig.savefig(os.path.join(os.getcwd(), figsdir,
-                "gosdt_pr_by_subject.pdf"), bbox_inches='tight', dpi=300)
+                "gosdt_pr_by_donor.pdf"), bbox_inches='tight', dpi=300)
     fig.savefig(os.path.join(os.getcwd(), figsdir,
-                "gosdt_pr_by_subject.png"), bbox_inches='tight', dpi=300)
+                "gosdt_pr_by_donor.png"), bbox_inches='tight', dpi=300)
 
-def overlay_roc(train_fpr, train_tpr, test_fpr_p1, test_tpr_p1, test_fpr_p2, test_tpr_p2, type='combined', figpath=None, title=None):
-    fig, ax = plt.subplots()
+def style_roc_by_person(train_fpr, train_tpr, test_fpr_p1, test_tpr_p1, test_fpr_p2, test_tpr_p2, type='combined', figpath=None):
+    fig, ax = plt.subplots(figsize=(6, 5))
     plt.style.use('classic')
     ax.grid(True, linestyle='dotted')
+    ax.set_xlim([0, 1])
+    ax.set_ylim([0, 1])
     ax.set_xlabel("False Positive Rate", fontsize=16)
     ax.set_ylabel("True Positive Rate", fontsize=16)
 
-    if title is None:
-        plt.title(f"ROC curve of GOSDT models by subject", fontsize=16)
-    else:
-        plt.title(title)
-    plt.plot(train_fpr, train_tpr, linestyle="--", marker=".",
-             markersize=10, c="orange", label=f'Train')
-    plt.plot(test_fpr_p1, test_tpr_p1, linestyle="--", marker=".",
-             markersize=10, c="blue", label=f'Donor 1 Test')
-    plt.plot(test_fpr_p2, test_tpr_p2, linestyle="--", marker=".",
-            markersize=10, c="blue", label=f'Donor 2 Test')
+    plt.title(f"ROC curve of GOSDT models by donor", fontsize=16, pad=14)
+
+    plt.scatter(train_fpr, train_tpr, alpha=0.7, s=20, c="blue", label=f'Train')
+    plt.scatter(test_fpr_p1, test_tpr_p1, alpha=0.7, s=20, c="red", label=f'Donor 1 Test')
+    plt.scatter(test_fpr_p2, test_tpr_p2, alpha=0.7, s=20, c="gold", label=f'Donor 2 Test')
     plt.plot([0, 1], [0, 1], linestyle="--", c="k")
     plt.legend(fontsize=16, loc='lower right')
     if figpath:
@@ -140,9 +134,9 @@ def overlay_roc(train_fpr, train_tpr, test_fpr_p1, test_tpr_p1, test_fpr_p2, tes
 
 
 def main():
-    kFigsDir = 'graphics/v3/gosdt'
-    kSweepPath = 'gosdt_sweep_results/v3/sweep.csv'
-    kGosdtDir = 'gosdt_sweep_results/v3'
+    kFigsDir = 'graphics/v5/gosdt'
+    kSweepPath = 'gosdt_sweep_results/v5/sweep.csv'
+    kGosdtDir = 'gosdt_sweep_results/v5'
     os.makedirs(kFigsDir, exist_ok=True)
 
     df = pd.read_csv(kSweepPath)
@@ -151,13 +145,15 @@ def main():
         'train_recall'].values, df['test_precision'].values, df['test_recall'].values
     test_precision_p1, test_recall_p1 = df['test_precision_p1'].values, df['test_recall_p1'].values
     test_precision_p2, test_recall_p2 = df['test_precision_p2'].values, df['test_recall_p2'].values
+    train_fpr, test_fpr_p1, test_fpr_p2, = df['train_fpr'], df['test_fpr_p1'], df['test_fpr_p2']
 
     top_n_features(model_features, kFigsDir, n=7, results_path=kGosdtDir)
     style_pr_curve(train_precision, train_recall,
                    test_precision, test_recall, kFigsDir)
     style_pr_curve_by_person(train_precision, train_recall, test_precision_p1,
                              test_recall_p1, test_precision_p2, test_recall_p2, kFigsDir)
-
+    
+    style_roc_by_person(train_fpr, train_recall, test_fpr_p1, test_recall_p1, test_fpr_p2, test_recall_p2, type='combined', figpath=kFigsDir)
 
 if __name__ == "__main__":
     main()
